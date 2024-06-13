@@ -31,6 +31,21 @@ class Card {
         const cardElement = this.element.querySelector(".card");
         cardElement.classList.remove("flipped");
     }
+
+    toggleFlip() {
+        if (this.isFlipped) {
+            this.isFlipped = !this.isFlipped;
+            this.#unflip();
+        } else {
+            this.isFlipped = !this.isFlipped;
+            this.#flip();
+        }
+    }
+
+    matches(otherCard) {
+        return this.name === otherCard.name &&
+               this.img === otherCard.img;
+    }
 }
 
 class Board {
@@ -74,6 +89,28 @@ class Board {
             this.onCardClick(card);
         }
     }
+
+    //Metodo para mezclar las cartas. Algoritmo de Fisher-Yates
+    shuffleCards() {
+        for (let i = this.cards.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [this.cards[i], this.cards[j]] = [this.cards[j], this.cards[i]];
+        }
+    }
+
+    reset() {
+        this.shuffleCards();
+        this.render();
+        this.flipDownAllCards();
+    }
+
+    flipDownAllCards() {
+        this.cards.forEach(card => {
+            if (card.isFlipped) {
+                card.toggleFlip();
+            }
+        })
+    }
 }
 
 class MemoryGame {
@@ -81,6 +118,10 @@ class MemoryGame {
         this.board = board;
         this.flippedCards = [];
         this.matchedCards = [];
+        this.moveCount = 0;
+        this.startTime = null;
+        this.elapsedTime = 0;
+        this.timerInterval = null;
         if (flipDuration < 350 || isNaN(flipDuration) || flipDuration > 3000) {
             flipDuration = 350;
             alert(
@@ -90,6 +131,9 @@ class MemoryGame {
         this.flipDuration = flipDuration;
         this.board.onCardClick = this.#handleCardClick.bind(this);
         this.board.reset();
+        this.updateCountMoveDisplay();
+        this.updateTimerDisplay();
+        this.startTimer();
     }
 
     #handleCardClick(card) {
@@ -98,9 +142,79 @@ class MemoryGame {
             this.flippedCards.push(card);
 
             if (this.flippedCards.length === 2) {
+                this.moveCount++;
+                this.updateCountMoveDisplay();
                 setTimeout(() => this.checkForMatch(), this.flipDuration);
             }
         }
+    }
+
+    updateCountMoveDisplay() {
+        const moveCountElement = document.getElementById('move-count')
+        moveCountElement.textContent = `Movimientos: ${this.moveCount}`;
+    }
+
+    updateTimerDisplay() {
+        const timerElement = document.getElementById('timer');
+        timerElement.textContent = `Tiempo: ${Math.floor(this.elapsedTime / 1000)}s`;
+    }
+
+    startTimer() {
+        this.startTime = Date.now();
+        this.timerInterval = setInterval(() => {
+            this.elapsedTime = Date.now() - this.startTime;
+            this.updateTimerDisplay();
+        }, 1000);
+    }
+
+    stopTimer() {
+        clearInterval(this.timerInterval);
+    }
+
+    checkForMatch() {
+        const [card1, card2] = this.flippedCards;
+        if (card1.matches(card2)) {
+            this.matchedCards.push(card1, card2);
+            this.flippedCards = [];
+            if (this.matchedCards.length == this.board.cards.length) {
+                this.displayFinalScore();
+                this.stopTimer();
+                this.resetGame();
+            }
+        } else {
+            card1.toggleFlip();
+            card2.toggleFlip();
+            this.flippedCards = [];
+        }
+    }
+
+    calculateScore() {
+        //Los primeros 20 segundos son libres de penalidades de tiempo
+        const timePenalty = Math.floor((this.elapsedTime - 20000) / 1000) * 10;
+
+        //Cada movimiento (dar vuelta un par de cartas) tiene una penalidad de 5 puntos
+        //luego del 6to movimiento
+        const movePenalty = (this.moveCount - 6) * 5;
+
+        //La puntuacion maxima es de 5000 puntos
+        const score = 5000 - timePenalty - movePenalty;
+        return Math.max(score, 0);  // La puntuación mínima es 0
+    }
+
+    displayFinalScore() {
+        const finalScore = this.calculateScore();
+        alert(`¡Juego terminado! Tu puntuación es: ${finalScore}`);
+    }
+
+    resetGame() {
+        this.flippedCards = [];
+        this.matchedCards = [];
+        this.moveCount = 0;
+        this.updateCountMoveDisplay()
+        this.updateTimerDisplay();
+        this.stopTimer();
+        this.startTimer();
+        this.board.reset();
     }
 }
 
